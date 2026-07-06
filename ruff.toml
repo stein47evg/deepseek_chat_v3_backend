@@ -1,0 +1,43 @@
+target-version = "py311"
+
+exclude = [
+    "migrations",
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+    "docs/conf.py",
+    "tests/fixtures",
+    "deploy_app.py",
+    "source*.py",
+]
+
+[lint]
+select = [
+    "E",   # ошибки Pycodestyle
+    "W",   # предупреждения Pycodestyle
+    "F",   # ошибки Pyflakes
+    "I",   # сортировка импортов
+    "N",   # именование переменных
+    "UP",  # обновления до новых версий Python
+    "B",   # возможные баги
+    "C4",  # более простые конструкции
+    "SIM", # упрощение кода
+    "RET", # проверка return
+    "ARG", # проверка аргументов
+]
+
+ignore = [
+    "E501",  # длинные строки (форматтер сам решит)
+]
+
+
+[lint.isort]
+combine-as-imports = true
+force-single-line = false
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

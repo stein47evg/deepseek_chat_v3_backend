@@ -1,0 +1,14 @@
+=== Файл: app/crud.py ===
++ 773:11
+            result = await db.execute(
+                select(FileVersion)
+                .where(
+                    FileVersion.project_id == project_id,
+                    FileVersion.file_path == file_path,
+                    FileVersion.version_number == change['to_version']
+                )
+                .order_by(FileVersion.id.desc())
+                .limit(1)
+            )
+            target_version = result.scalar_one_or_none()
+- 773-781
