@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeek Chat — тестовый фронтенд</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            color: #58a6ff;
+            font-weight: 300;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #8b949e;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-area textarea {
+            flex: 1;
+            padding: 12px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: #c9d1d9;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 70px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .input-area textarea:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        .input-area button {
+            padding: 12px 30px;
+            background: #238636;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .input-area button:hover {
+            background: #2ea043;
+        }
+
+        .input-area button:disabled {
+            background: #21262d;
+            color: #484f58;
+            cursor: not-allowed;
+        }
+
+        .chat-box {
+            flex: 1;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-y: auto;
+            min-height: 300px;
+            max-height: 600px;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .message.user {
+            background: #1f2937;
+            border-left: 3px solid #58a6ff;
+            text-align: left;
+        }
+
+        .message.assistant {
+            background: #0d1117;
+            border-left: 3px solid #238636;
+            text-align: left;
+        }
+
+        .message .role-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #8b949e;
+            display: block;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .message .content {
+            margin-top: 4px;
+        }
+
+        .files-block {
+            margin-top: 10px;
+            padding: 10px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+        }
+
+        .files-block summary {
+            cursor: pointer;
+            color: #58a6ff;
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .files-block pre {
+            background: #0d1117;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+            margin-top: 8px;
+            border: 1px solid #21262d;
+        }
+
+        .status {
+            color: #8b949e;
+            font-size: 13px;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        .error {
+            color: #f85149;
+        }
+
+        .loading::after {
+            content: " ⏳";
+            animation: dots 1.2s steps(4) infinite;
+        }
+
+        @keyframes dots {
+            0% {
+                content: " ⏳";
+            }
+
+            25% {
+                content: " ⏳.";
+            }
+
+            50% {
+                content: " ⏳..";
+            }
+
+            75% {
+                content: " ⏳...";
+            }
+        }
+
+        .clear-btn {
+            background: #21262d !important;
+            color: #c9d1d9 !important;
+            margin-left: 5px;
+        }
+
+        .clear-btn:hover {
+            background: #30363d !important;
+        }
+
+        .chat-id-input {
+            padding: 8px 12px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: #c9d1d9;
+            font-size: 14px;
+            width: 80px;
+        }
+
+        .chat-id-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        .label {
+            color: #8b949e;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧠 DeepSeek Chat</h1>
+        <div class="subtitle">Тестовый клиент для бэкенда</div>
+
+        <div class="input-area">
+            <div class="label">
+                Chat ID:
+                <input type="number" id="chatId" class="chat-id-input" value="1" min="1">
+            </div>
+            <textarea id="promptInput" placeholder="Напиши запрос для ИИ...">Напиши hello world на Python</textarea>
+            <button id="sendBtn">Отправить</button>
+            <button id="clearBtn" class="clear-btn">✕ Очистить</button>
+        </div>
+
+        <div id="status" class="status">Готов к работе</div>
+
+        <div id="chatBox" class="chat-box">
+            <div style="color: #8b949e; text-align: center; padding: 40px 0; font-size: 14px;">
+                👋 Отправь запрос, чтобы начать диалог
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chatBox');
+        const promptInput = document.getElementById('promptInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const status = document.getElementById('status');
+        const chatIdInput = document.getElementById('chatId');
+
+        let isGenerating = false;
+        let currentAssistantDiv = null;
+        let fullContent = '';
+
+        function getChatId() {
+            return parseInt(chatIdInput.value) || 1;
+        }
+
+        function clearChat() {
+            chatBox.innerHTML = '';
+            status.textContent = 'Готов к работе';
+            status.className = 'status';
+        }
+
+        function addMessage(role, content) {
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            const label = document.createElement('span');
+            label.className = 'role-label';
+            label.textContent = role === 'user' ? '👤 Вы' : '🤖 ИИ';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'content';
+            contentDiv.textContent = content;
+            div.appendChild(label);
+            div.appendChild(contentDiv);
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return div;
+        }
+
+        function addAssistantMessageStart() {
+            const div = document.createElement('div');
+            div.className = 'message assistant';
+            const label = document.createElement('span');
+            label.className = 'role-label';
+            label.textContent = '🤖 ИИ';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'content';
+            div.appendChild(label);
+            div.appendChild(contentDiv);
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return contentDiv;
+        }
+
+        function addFileBlock(filename, content) {
+            const details = document.createElement('details');
+            details.className = 'files-block';
+            const summary = document.createElement('summary');
+            summary.textContent = `📄 ${filename}`;
+            details.appendChild(summary);
+            const pre = document.createElement('pre');
+            pre.textContent = content;
+            details.appendChild(pre);
+            chatBox.appendChild(details);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function sendRequest() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                status.textContent = '⚠️ Введите запрос';
+                status.className = 'status error';
+                return;
+            }
+
+            const chatId = getChatId();
+
+            if (isGenerating) return;
+            isGenerating = true;
+            sendBtn.disabled = true;
+            status.textContent = '⏳ Генерация...';
+            status.className = 'status loading';
+
+            // Убираем приветствие
+            const placeholder = chatBox.querySelector('div[style]');
+            if (placeholder) placeholder.remove();
+
+            // Добавляем сообщение пользователя
+            addMessage('user', prompt);
+            promptInput.value = '';
+
+            // Создаём блок для ответа ассистента
+            const contentDiv = addAssistantMessageStart();
+            fullContent = '';
+
+            let hasFiles = false;
+
+            try {
+                const response = await fetch(`http://localhost:8000/api/v1/chats/${chatId}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: prompt,
+                        temperature: 0.7,
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]' || data === '') continue;
+
+                            try {
+                                const json = JSON.parse(data);
+
+                                if (json.error) {
+                                    throw new Error(json.error);
+                                }
+
+                                if (json.content) {
+                                    fullContent += json.content;
+                                    contentDiv.textContent = fullContent;
+                                    chatBox.scrollTop = chatBox.scrollHeight;
+                                }
+
+                                if (json.file) {
+                                    hasFiles = true;
+                                    addFileBlock(json.file.filename, json.file.content);
+                                }
+
+                                if (json.done) {
+                                    status.textContent = `✅ Генерация завершена (ID: ${json.message_id || '?'})`;
+                                    status.className = 'status';
+                                }
+                            } catch (e) {
+                                if (e.message && e.message !== '') {
+                                    throw e;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!fullContent && !hasFiles) {
+                    status.textContent = '⚠️ Ответ пустой';
+                    status.className = 'status error';
+                }
+
+            } catch (error) {
+                status.textContent = `❌ Ошибка: ${error.message}`;
+                status.className = 'status error';
+                console.error(error);
+            } finally {
+                isGenerating = false;
+                sendBtn.disabled = false;
+                if (status.textContent === '⏳ Генерация...') {
+                    status.textContent = '✅ Готово';
+                    status.className = 'status';
+                }
+            }
+        }
+
+        // Обработчики событий
+        sendBtn.addEventListener('click', sendRequest);
+
+        clearBtn.addEventListener('click', clearChat);
+
+        promptInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendRequest();
+            }
+        });
+
+        // Начальная подсказка
+        const savedPrompt = localStorage.getItem('lastPrompt');
+        if (savedPrompt) {
+            promptInput.value = savedPrompt;
+        }
+
+        promptInput.addEventListener('change', () => {
+            localStorage.setItem('lastPrompt', promptInput.value);
+        });
+
+        console.log('🧠 Тестовый фронтенд загружен!');
+        console.log('Используй Chat ID для переключения между чатами.');
+    </script>
+</body>
+
+</html>

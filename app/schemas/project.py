@@ -1,16 +1,19 @@
-# Pydantic схемы для проектов.
-from datetime import datetime
 from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
 
 
 class ProjectCreate(BaseModel):
-    # Схема для создания проекта.
     name: str
     folder_path: str
 
 
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    folder_path: Optional[str] = None
+
+
 class ProjectResponse(BaseModel):
-    # Схема ответа с данными проекта.
     id: int
     name: str
     folder_path: str

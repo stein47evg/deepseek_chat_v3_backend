@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
@@ -28,4 +28,17 @@ def get_db():
 
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    # Проверяем, существуют ли таблицы
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    
+    # Если таблиц нет, создаём их
+    if not tables:
+        Base.metadata.create_all(bind=engine)
+    else:
+        # Если таблицы есть, проверяем, что все нужные таблицы существуют
+        required_tables = ['projects', 'chats', 'messages', 'file_versions', 'snapshots', 'system_prompts']
+        missing_tables = [t for t in required_tables if t not in tables]
+        if missing_tables:
+            # Создаём недостающие таблицы
+            Base.metadata.create_all(bind=engine)

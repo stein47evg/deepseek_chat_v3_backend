@@ -1,19 +1,20 @@
-# Pydantic схемы для чатов.
-from datetime import datetime
 from pydantic import BaseModel
+from datetime import datetime
 from typing import Optional
 
 
 class ChatCreate(BaseModel):
-    # Схема для создания чата.
-    project_id: Optional[int] = None  # <-- Optional
+    project_id: int
     title: Optional[str] = "Новый чат"
 
 
+class ChatUpdate(BaseModel):
+    title: str
+
+
 class ChatResponse(BaseModel):
-    # Схема ответа с данными чата.
     id: int
-    project_id: Optional[int] = None  # <-- Optional
+    project_id: int
     title: str
     created_at: datetime
 
