@@ -9,9 +9,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-
 from app.api.v1 import (
     chats,
+    file_manager,
     files,
     generate,
     messages,
@@ -66,6 +66,7 @@ app.include_router(sync.router, prefix="/api/v1")
 app.include_router(system_prompts.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
 app.include_router(tokens.router, prefix="/api/v1")
+app.include_router(file_manager.router, prefix="/file-manager")
 
 
 @app.get("/")

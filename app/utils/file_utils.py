@@ -2,9 +2,78 @@
 Утилиты для работы с файловой системой.
 """
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 from app.core.config import settings
 from app.core.exceptions import InvalidPathError, FileTooLargeError
+
+
+# Игнорируемые папки и файлы
+IGNORED_PATTERNS = [
+    ".git", "node_modules", "__pycache__", ".venv", "venv",
+    ".idea", ".vscode", "dist", "build", ".next", "coverage",
+    "*.pyc", "*.pyo", "*.so", "*.dll", "*.exe",
+    "*.log", "*.tmp", "*.cache", ".DS_Store", "Thumbs.db"
+]
+
+
+def is_ignored(path: str) -> bool:
+    """
+    Проверяет, нужно ли игнорировать файл/папку.
+    
+    Аргументы:
+        path: Путь к файлу или папке
+    Возвращает:
+        True если нужно игнорировать, иначе False
+    """
+    name = os.path.basename(path)
+    for pattern in IGNORED_PATTERNS:
+        if pattern.startswith("*"):
+            if name.endswith(pattern[1:]):
+                return True
+        elif pattern in name or name == pattern:
+            return True
+    return False
+
+
+def scan_directory_for_disk(directory: str, show_ignored: bool = False) -> List[Dict[str, Any]]:
+    """
+    Сканирует директорию и возвращает список файлов для файлового менеджера.
+    
+    Аргументы:
+        directory: Путь к директории
+        show_ignored: Показывать игнорируемые файлы
+    Возвращает:
+        Список словарей с информацией о файлах
+    """
+    result = []
+    directory = os.path.abspath(directory)
+    
+    for root, dirs, files in os.walk(directory):
+        # Фильтруем игнорируемые папки
+        if not show_ignored:
+            dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d))]
+        
+        for file in files:
+            file_path = os.path.join(root, file)
+            rel_path = os.path.relpath(file_path, directory)
+            
+            # Фильтруем игнорируемые файлы
+            if not show_ignored and is_ignored(rel_path):
+                continue
+            
+            try:
+                stat = os.stat(file_path)
+                result.append({
+                    "path": rel_path.replace("\\", "/"),
+                    "name": file,
+                    "size": stat.st_size,
+                    "modified": stat.st_mtime,
+                    "isDirectory": False,
+                })
+            except (OSError, IOError):
+                continue
+    
+    return result
 
 
 def safe_join(base_path: str, filename: str) -> str:
