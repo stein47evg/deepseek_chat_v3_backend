@@ -66,7 +66,7 @@ app.include_router(sync.router, prefix="/api/v1")
 app.include_router(system_prompts.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
 app.include_router(tokens.router, prefix="/api/v1")
-app.include_router(file_manager.router, prefix="/file-manager")
+app.include_router(file_manager.router, prefix="/api/v1")
 
 
 @app.get("/")

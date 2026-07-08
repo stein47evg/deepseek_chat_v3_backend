@@ -1,17 +1,19 @@
 """
 Эндпоинты для файлового менеджера.
 """
-import os
+
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+
 from app.core.database import get_db
 from app.models.project import Project
 from app.schemas.file_manager import (
-    DiskFileResponse,
     DeleteFileResponse,
-    FlattenHistoryResponse
+    DiskFileResponse,
+    FlattenHistoryResponse,
 )
 from app.services.file_manager_service import FileManagerService
 from app.utils.file_utils import safe_join
@@ -20,11 +22,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/file-manager", tags=["File Manager"])
 
 
-@router.get("/{project_id}/disk-files", response_model=List[DiskFileResponse])
+@router.get("/{project_id}/disk-files", response_model=list[DiskFileResponse])
 def get_disk_files(
-    project_id: int,
-    show_ignored: bool = False,
-    db: Session = Depends(get_db)
+    project_id: int, show_ignored: bool = False, db: Session = Depends(get_db)
 ):
     """
     Получить все файлы на диске проекта с флагами состояния.
@@ -33,34 +33,28 @@ def get_disk_files(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail=f"Проект {project_id} не найден")
-    
+
     if not os.path.exists(project.folder_path):
         return []
-    
+
     return FileManagerService.get_disk_files(db, project, show_ignored)
 
 
 @router.post("/{project_id}/disk-files/sync")
-def sync_disk_files(
-    project_id: int,
-    db: Session = Depends(get_db)
-):
+def sync_disk_files(project_id: int, db: Session = Depends(get_db)):
     """
     Синхронизировать файлы с диска в БД.
     """
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail=f"Проект {project_id} не найден")
-    
+
     return FileManagerService.sync_disk_to_db(db, project)
 
 
 @router.delete("/{project_id}/files/{path:path}", response_model=DeleteFileResponse)
 def delete_file(
-    project_id: int,
-    path: str,
-    hard: bool = False,
-    db: Session = Depends(get_db)
+    project_id: int, path: str, hard: bool = False, db: Session = Depends(get_db)
 ):
     """
     Удалить файл с диска.
@@ -70,29 +64,28 @@ def delete_file(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail=f"Проект {project_id} не найден")
-    
+
     normalized_path = path.replace("\\", "/")
     full_path = safe_join(project.folder_path, normalized_path)
-    
+
     if not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail=f"Файл {normalized_path} не найден на диске")
-    
+        raise HTTPException(
+            status_code=404, detail=f"Файл {normalized_path} не найден на диске"
+        )
+
     if os.path.isdir(full_path):
         raise HTTPException(status_code=400, detail="Нельзя удалить папку")
-    
+
     if hard:
         result = FileManagerService.hard_delete_file(db, project, normalized_path)
     else:
         result = FileManagerService.soft_delete_file(db, project, normalized_path)
-    
+
     return result
 
 
 @router.post("/{project_id}/history/flatten", response_model=FlattenHistoryResponse)
-def flatten_history(
-    project_id: int,
-    db: Session = Depends(get_db)
-):
+def flatten_history(project_id: int, db: Session = Depends(get_db)):
     """
     Сбросить историю состояний.
     Удаляет все старые снимки и неактуальные версии файлов.
@@ -100,5 +93,5 @@ def flatten_history(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail=f"Проект {project_id} не найден")
-    
+
     return FileManagerService.flatten_history(db, project)
