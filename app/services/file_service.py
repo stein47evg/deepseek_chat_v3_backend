@@ -2,17 +2,17 @@
 Сервис для работы с файлами.
 """
 import os
-from typing import List, Optional
-from fastapi import UploadFile, HTTPException
+
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
-from app.models.project import Project
+
 from app.models.chat import Chat
 from app.models.file_version import FileVersion
-from app.models.snapshot import Snapshot
-from app.schemas.file_version import FileVersionResponse
-from app.utils.file_utils import safe_join, validate_file_size, is_allowed_file
-from app.utils.hash_utils import compute_hash
+from app.models.project import Project
 from app.services.snapshot_service import SnapshotService
+from app.utils.file_utils import is_allowed_file, safe_join, validate_file_size
+from app.utils.hash_utils import compute_hash
+from typing import List
 
 
 class FileService:
@@ -26,12 +26,28 @@ class FileService:
         ).order_by(FileVersion.filename, FileVersion.created_at.desc()).all()
 
     @staticmethod
-    def get_by_id(db: Session, file_id: int) -> Optional[FileVersion]:
+    def get_by_project(db: Session, project_id: int) -> List[FileVersion]:
+        """
+        Получить все текущие версии файлов для проекта.
+        """
+        # Находим чат проекта
+        chat = db.query(Chat).filter(Chat.project_id == project_id).first()
+        if not chat:
+            return []
+        
+        # Получаем все текущие версии файлов чата
+        return db.query(FileVersion).filter(
+            FileVersion.chat_id == chat.id,
+            FileVersion.is_current == True
+        ).order_by(FileVersion.filename.asc()).all()
+
+    @staticmethod
+    def get_by_id(db: Session, file_id: int) -> FileVersion | None:
         """Получить версию файла по ID."""
         return db.query(FileVersion).filter(FileVersion.id == file_id).first()
 
     @staticmethod
-    async def upload(db: Session, project_id: int, files: List[UploadFile]) -> List[FileVersion]:
+    async def upload(db: Session, project_id: int, files: list[UploadFile]) -> list[FileVersion]:
         """
         Загрузить файлы в проект.
         Файлы сразу записываются на диск и создаются версии.
@@ -95,6 +111,83 @@ class FileService:
             snapshot_type="upload",
             level=2,
             name=f"Загрузка {len(files)} файлов",
+            files_manifest=manifest
+        )
+
+        db.commit()
+        return created_versions
+
+    @staticmethod
+    def sync_by_filename(db: Session, project_id: int, filenames: list[str]) -> list[FileVersion]:
+        """
+        Синхронизировать файлы по их именам (путям) с диска в БД.
+        """
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="Проект не найден")
+
+        chat = db.query(Chat).filter(Chat.project_id == project_id).first()
+        if not chat:
+            raise HTTPException(status_code=404, detail="У проекта нет чатов")
+
+        created_versions = []
+        manifest = {}
+
+        for filename in filenames:
+            normalized_path = filename.replace("\\", "/")
+            full_path = safe_join(project.folder_path, normalized_path)
+
+            if not os.path.exists(full_path):
+                continue
+
+            if not is_allowed_file(normalized_path):
+                continue
+
+            # Читаем содержимое
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    content_str = f.read()
+            except UnicodeDecodeError:
+                continue
+
+            # Проверяем, есть ли уже такая версия
+            existing = db.query(FileVersion).filter(
+                FileVersion.chat_id == chat.id,
+                FileVersion.filename == normalized_path,
+                FileVersion.is_current == True
+            ).first()
+
+            if existing:
+                # Обновляем существующую
+                existing.content = content_str
+                existing.content_hash = compute_hash(content_str)
+                existing.is_current = True
+                existing.applied = True
+                created_versions.append(existing)
+            else:
+                # Создаём новую версию
+                version = FileVersion(
+                    chat_id=chat.id,
+                    filename=normalized_path,
+                    content=content_str,
+                    content_hash=compute_hash(content_str),
+                    file_type="synced",
+                    is_current=True,
+                    applied=True
+                )
+                db.add(version)
+                db.flush()
+                created_versions.append(version)
+
+            manifest[normalized_path] = compute_hash(content_str)
+
+        # Создаём снимок
+        SnapshotService.create(
+            db=db,
+            project_id=project_id,
+            snapshot_type="sync",
+            level=2,
+            name=f"Синхронизация {len(filenames)} файлов",
             files_manifest=manifest
         )
 

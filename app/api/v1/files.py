@@ -2,7 +2,7 @@
 Эндпоинты для управления файлами.
 """
 import os
-from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -12,6 +12,8 @@ from app.models.chat import Chat
 from app.schemas.file_version import FileVersionResponse, ApplyRequest, MakeCurrentRequest
 from app.services.file_service import FileService
 from app.api.dependencies import get_chat
+from fastapi import UploadFile, File, Form
+from typing import List, Optional
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -21,6 +23,15 @@ def get_files(chat_id: int, db: Session = Depends(get_db)):
     """Получить все файлы чата."""
     return FileService.get_by_chat(db, chat_id)
 
+@router.get("/projects/{project_id}/files", response_model=List[FileVersionResponse])
+def get_project_files(
+    project_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Получить все текущие версии файлов для проекта.
+    """
+    return FileService.get_by_project(db, project_id)
 
 @router.get("/{file_id}", response_model=FileVersionResponse)
 def get_file(file_id: int, db: Session = Depends(get_db)):
@@ -31,15 +42,36 @@ def get_file(file_id: int, db: Session = Depends(get_db)):
     return version
 
 
+# @router.post("/projects/{project_id}/upload", response_model=List[FileVersionResponse])
+# async def upload_files(
+#     project_id: int,
+#     files: List[UploadFile] = File(...),
+#     db: Session = Depends(get_db)
+# ):
+#     """Загрузить файлы в проект."""
+#     return await FileService.upload(db, project_id, files)
 @router.post("/projects/{project_id}/upload", response_model=List[FileVersionResponse])
 async def upload_files(
     project_id: int,
-    files: List[UploadFile] = File(...),
+    files: Optional[List[UploadFile]] = File(None),  # <-- сделали опциональным
+    filenames: Optional[List[str]] = Form(None),
     db: Session = Depends(get_db)
 ):
-    """Загрузить файлы в проект."""
-    return await FileService.upload(db, project_id, files)
+    """
+    Загрузить или синхронизировать файлы.
+    - files: файлы с содержимым (из input type="file")
+    - filenames: имена файлов на диске (для синхронизации)
+    """
+    # Если переданы файлы с содержимым
+    if files and len(files) > 0:
+        return await FileService.upload(db, project_id, files)
+    
+    # Если переданы только имена файлов
+    if filenames and len(filenames) > 0:
+        return  FileService.sync_by_filename(db, project_id, filenames)
+    
 
+    raise HTTPException(status_code=400, detail="Не указаны файлы или имена файлов")
 
 @router.put("/{file_id}/apply")
 def apply_file(file_id: int, db: Session = Depends(get_db)):

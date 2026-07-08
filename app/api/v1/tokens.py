@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.services.token_counter import count_tokens as ct
 
 router = APIRouter(prefix="/tokens", tags=["tokens"])
 
@@ -8,6 +9,5 @@ class TokenCountRequest(BaseModel):
 
 @router.post("/count")
 def count_tokens(request: TokenCountRequest):
-    """Подсчёт количества токенов в тексте (приблизительно)."""
-    tokens = len(request.content) // 4
-    return {"tokens": tokens}
+    """Подсчёт количества токенов в тексте."""
+    return {"tokens": ct(request.content)}
