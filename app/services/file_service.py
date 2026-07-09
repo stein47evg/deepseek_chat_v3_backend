@@ -1,6 +1,7 @@
 """
 Сервис для работы с файлами.
 """
+
 import os
 
 from fastapi import HTTPException, UploadFile
@@ -21,9 +22,12 @@ class FileService:
     @staticmethod
     def get_by_chat(db: Session, chat_id: int):
         """Получить все файлы чата."""
-        return db.query(FileVersion).filter(
-            FileVersion.chat_id == chat_id
-        ).order_by(FileVersion.filename, FileVersion.created_at.desc()).all()
+        return (
+            db.query(FileVersion)
+            .filter(FileVersion.chat_id == chat_id)
+            .order_by(FileVersion.filename, FileVersion.created_at.desc())
+            .all()
+        )
 
     @staticmethod
     def get_by_project(db: Session, project_id: int) -> List[FileVersion]:
@@ -34,12 +38,14 @@ class FileService:
         chat = db.query(Chat).filter(Chat.project_id == project_id).first()
         if not chat:
             return []
-        
+
         # Получаем все текущие версии файлов чата
-        return db.query(FileVersion).filter(
-            FileVersion.chat_id == chat.id,
-            FileVersion.is_current == True
-        ).order_by(FileVersion.filename.asc()).all()
+        return (
+            db.query(FileVersion)
+            .filter(FileVersion.chat_id == chat.id, FileVersion.is_current == True)
+            .order_by(FileVersion.filename.asc())
+            .all()
+        )
 
     @staticmethod
     def get_by_id(db: Session, file_id: int) -> FileVersion | None:
@@ -47,7 +53,9 @@ class FileService:
         return db.query(FileVersion).filter(FileVersion.id == file_id).first()
 
     @staticmethod
-    async def upload(db: Session, project_id: int, files: list[UploadFile]) -> list[FileVersion]:
+    async def upload(
+        db: Session, project_id: int, files: list[UploadFile]
+    ) -> list[FileVersion]:
         """
         Загрузить файлы в проект.
         Файлы сразу записываются на диск и создаются версии.
@@ -68,7 +76,7 @@ class FileService:
             if not is_allowed_file(uploaded_file.filename):
                 raise HTTPException(
                     status_code=415,
-                    detail=f"Неподдерживаемый тип файла: {uploaded_file.filename}"
+                    detail=f"Неподдерживаемый тип файла: {uploaded_file.filename}",
                 )
 
             content = await uploaded_file.read()
@@ -80,7 +88,7 @@ class FileService:
             except UnicodeDecodeError:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Файл {uploaded_file.filename} должен быть в UTF-8"
+                    detail=f"Файл {uploaded_file.filename} должен быть в UTF-8",
                 )
 
             # Записываем на диск
@@ -97,7 +105,7 @@ class FileService:
                 content_hash=compute_hash(content_str),
                 file_type="uploaded",
                 is_current=True,
-                applied=True
+                applied=True,
             )
             db.add(version)
             db.flush()
@@ -111,14 +119,16 @@ class FileService:
             snapshot_type="upload",
             level=2,
             name=f"Загрузка {len(files)} файлов",
-            files_manifest=manifest
+            files_manifest=manifest,
         )
 
         db.commit()
         return created_versions
 
     @staticmethod
-    def sync_by_filename(db: Session, project_id: int, filenames: list[str]) -> list[FileVersion]:
+    def sync_by_filename(
+        db: Session, project_id: int, filenames: list[str]
+    ) -> list[FileVersion]:
         """
         Синхронизировать файлы по их именам (путям) с диска в БД.
         """
@@ -140,22 +150,35 @@ class FileService:
             if not os.path.exists(full_path):
                 continue
 
-            if not is_allowed_file(normalized_path):
-                continue
+            if not is_allowed_file(full_path):
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"Неподдерживаемый тип файла: {normalized_path}",
+                )
+
+            # Валидация
 
             # Читаем содержимое
             try:
                 with open(full_path, "r", encoding="utf-8") as f:
                     content_str = f.read()
             except UnicodeDecodeError:
-                continue
+                status_code = (415,)
+                detail = f"Неподдерживаемый кодировка файла: {normalized_path}"
+
+            # Валидация
+            validate_file_size(content_str)
 
             # Проверяем, есть ли уже такая версия
-            existing = db.query(FileVersion).filter(
-                FileVersion.chat_id == chat.id,
-                FileVersion.filename == normalized_path,
-                FileVersion.is_current == True
-            ).first()
+            existing = (
+                db.query(FileVersion)
+                .filter(
+                    FileVersion.chat_id == chat.id,
+                    FileVersion.filename == normalized_path,
+                    FileVersion.is_current == True,
+                )
+                .first()
+            )
 
             if existing:
                 # Обновляем существующую
@@ -173,7 +196,7 @@ class FileService:
                     content_hash=compute_hash(content_str),
                     file_type="synced",
                     is_current=True,
-                    applied=True
+                    applied=True,
                 )
                 db.add(version)
                 db.flush()
@@ -188,7 +211,7 @@ class FileService:
             snapshot_type="sync",
             level=2,
             name=f"Синхронизация {len(filenames)} файлов",
-            files_manifest=manifest
+            files_manifest=manifest,
         )
 
         db.commit()
@@ -220,8 +243,7 @@ class FileService:
 
         # Обновляем статус
         db.query(FileVersion).filter(
-            FileVersion.chat_id == chat.id,
-            FileVersion.filename == version.filename
+            FileVersion.chat_id == chat.id, FileVersion.filename == version.filename
         ).update({"is_current": False})
 
         version.is_current = True
@@ -235,7 +257,7 @@ class FileService:
             snapshot_type="apply",
             level=2,
             name=f"Применена версия {version.filename}",
-            files_manifest=manifest
+            files_manifest=manifest,
         )
 
         db.commit()
@@ -267,8 +289,7 @@ class FileService:
 
         # Обновляем статус
         db.query(FileVersion).filter(
-            FileVersion.chat_id == chat.id,
-            FileVersion.filename == version.filename
+            FileVersion.chat_id == chat.id, FileVersion.filename == version.filename
         ).update({"is_current": False})
 
         version.is_current = True
@@ -282,7 +303,7 @@ class FileService:
             snapshot_type="auto",
             level=3,
             name=f"Выбрана версия {version.filename}",
-            files_manifest=manifest
+            files_manifest=manifest,
         )
 
         db.commit()
@@ -300,10 +321,11 @@ class FileService:
     def _get_current_manifest(db: Session, chat_id: int) -> dict:
         """Собирает мэнифест текущих файлов чата."""
         manifest = {}
-        current_files = db.query(FileVersion).filter(
-            FileVersion.chat_id == chat_id,
-            FileVersion.is_current == True
-        ).all()
+        current_files = (
+            db.query(FileVersion)
+            .filter(FileVersion.chat_id == chat_id, FileVersion.is_current == True)
+            .all()
+        )
 
         for version in current_files:
             manifest[version.filename] = version.content_hash
