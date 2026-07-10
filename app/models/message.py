@@ -1,6 +1,3 @@
-"""
-Модель сообщения.
-"""
 from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, ForeignKey, Enum, DECIMAL
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -15,7 +12,6 @@ class Message(Base):
     role = Column(Enum("user", "assistant", "system"), nullable=False)
     content = Column(Text, nullable=False)
 
-    # Статистика токенов
     input_tokens = Column(Integer, nullable=True)
     output_tokens = Column(Integer, nullable=True)
     total_tokens = Column(Integer, nullable=True)
@@ -23,9 +19,5 @@ class Message(Base):
 
     created_at = Column(TIMESTAMP, server_default=func.now())
 
-    # Связи
     chat = relationship("Chat", back_populates="messages")
     file_versions = relationship("FileVersion", back_populates="message")
-
-    def __repr__(self):
-        return f"<Message(id={self.id}, role='{self.role}')>"

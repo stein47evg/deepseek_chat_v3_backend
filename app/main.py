@@ -24,11 +24,15 @@ from app.api.v1 import (
 )
 from app.core.config import settings
 from app.core.database import init_db
+from app.utils.logging_utils import setup_logging
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Обработчик жизненного цикла приложения."""
+    # Настройка логирования
+    setup_logging(settings.LOG_LEVEL)
+    
     # Запуск: инициализация БД
     init_db()
     yield

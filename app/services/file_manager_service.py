@@ -32,26 +32,26 @@ class FileManagerService:
     ) -> list[dict[str, Any]]:
         """
         Получить файлы с диска с дополнительными флагами.
+        Фильтрует файлы ТОЛЬКО для указанного проекта.
         """
         # 1. Сканируем диск
         disk_files = scan_directory_for_disk(project.folder_path, show_ignored)
 
-        # 2. Получаем чат проекта
-        chat = db.query(Chat).filter(Chat.project_id == project.id).first()
+        # 2. Получаем все текущие файлы проекта через JOIN
+        db_files = db.query(FileVersion).join(
+            Chat, FileVersion.chat_id == Chat.id
+        ).filter(
+            Chat.project_id == project.id,
+            FileVersion.is_current == True
+        ).all()
 
-        # 3. Собираем пути файлов из БД (is_current = True)
+        # 3. Собираем пути файлов из БД
         db_paths: set[str] = set()
         file_ids: dict[str, int] = {}
-        if chat:
-            versions = (
-                db.query(FileVersion)
-                .filter(FileVersion.chat_id == chat.id, FileVersion.is_current == True)
-                .all()
-            )
-            for v in versions:
-                normalized = v.filename.replace("\\", "/")
-                db_paths.add(normalized)
-                file_ids[normalized] = v.id
+        for v in db_files:
+            normalized = v.filename.replace("\\", "/")
+            db_paths.add(normalized)
+            file_ids[normalized] = v.id
 
         # 4. Формируем ответ
         result = []
@@ -78,6 +78,7 @@ class FileManagerService:
         """
         Мягкое удаление: файл удаляется с диска, но остаётся в БД (is_current = False).
         """
+        # Находим чат проекта
         chat = db.query(Chat).filter(Chat.project_id == project.id).first()
         if not chat:
             raise ValueError(f"У проекта {project.id} нет чатов")
@@ -107,7 +108,7 @@ class FileManagerService:
             db.commit()
 
         # 4. Создаём снимок
-        manifest = FileManagerService._get_current_manifest(db, chat.id)
+        manifest = FileManagerService._get_current_manifest(db, project.id)
         SnapshotService.create(
             db=db,
             project_id=project.id,
@@ -157,7 +158,7 @@ class FileManagerService:
         db.commit()
 
         # 4. Создаём снимок
-        manifest = FileManagerService._get_current_manifest(db, chat.id)
+        manifest = FileManagerService._get_current_manifest(db, project.id)
         SnapshotService.create(
             db=db,
             project_id=project.id,
@@ -237,7 +238,7 @@ class FileManagerService:
         db.commit()
 
         # Создаём снимок
-        manifest = FileManagerService._get_current_manifest(db, chat.id)
+        manifest = FileManagerService._get_current_manifest(db, project.id)
         SnapshotService.create(
             db=db,
             project_id=project.id,
@@ -330,14 +331,17 @@ class FileManagerService:
         }
 
     @staticmethod
-    def _get_current_manifest(db: Session, chat_id: int) -> dict[str, str]:
-        """Собирает мэнифест текущих файлов чата."""
+    def _get_current_manifest(db: Session, project_id: int) -> dict[str, str]:
+        """Собирает мэнифест текущих файлов проекта."""
+        chat = db.query(Chat).filter(Chat.project_id == project_id).first()
+        if not chat:
+            return {}
+
         manifest = {}
-        current_files = (
-            db.query(FileVersion)
-            .filter(FileVersion.chat_id == chat_id, FileVersion.is_current == True)
-            .all()
-        )
+        current_files = db.query(FileVersion).filter(
+            FileVersion.chat_id == chat.id,
+            FileVersion.is_current == True
+        ).all()
 
         for version in current_files:
             manifest[version.filename] = version.content_hash

@@ -177,7 +177,7 @@ def scan_directory(
             rel_path = os.path.relpath(full_path, directory)
 
             # Проверяем расширение
-            if not is_allowed_file(rel_path):
+            if not is_allowed_file(full_path):
                 continue
 
             try:

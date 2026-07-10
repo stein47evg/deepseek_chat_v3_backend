@@ -1,4 +1,3 @@
-# Pydantic схемы для сообщений.
 from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional, List
@@ -6,7 +5,6 @@ from app.schemas.file_version import FileVersionResponse
 
 
 class MessageResponse(BaseModel):
-    # Схема ответа с данными сообщения.
     id: int
     chat_id: int
     role: str
@@ -20,3 +18,18 @@ class MessageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ApplyFileResult(BaseModel):
+    filename: str
+    status: str  # success | failed
+    error: Optional[str] = None
+
+
+class ApplyFilesResponse(BaseModel):
+    status: str  # completed | partial
+    message_id: int
+    files_applied: int
+    files_failed: int
+    snapshot_id: Optional[int] = None
+    files: List[ApplyFileResult]

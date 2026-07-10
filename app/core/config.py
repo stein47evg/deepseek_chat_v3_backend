@@ -28,6 +28,10 @@ class Settings:
     ENV: str = os.getenv("ENV", "development")
     DEBUG: bool = ENV == "development"
 
+    # Логирование
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "detailed")  # simple | detailed
+
     # CORS
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",

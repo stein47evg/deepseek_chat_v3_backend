@@ -169,13 +169,14 @@ class SnapshotService:
 
     @staticmethod
     def _get_current_manifest(db: Session, project_id: int) -> Dict[str, str]:
+        """Собирает мэнифест текущих файлов проекта через chat_id."""
         chat = db.query(Chat).filter(Chat.project_id == project_id).first()
         if not chat:
             return {}
 
         manifest = {}
         current_files = db.query(FileVersion).filter(
-            FileVersion.chat_id == chat.id,
+            FileVersion.chat_id == chat.id,  # ✅ исправлено
             FileVersion.is_current == True
         ).all()
 

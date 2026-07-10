@@ -1,13 +1,10 @@
-"""
-Парсинг ответа ИИ.
-Извлекает файлы и сниппеты из текста с маркерами.
-"""
 import re
 import os
 from typing import Tuple, List, Dict, Optional
+import logging
 
+logger = logging.getLogger(__name__)
 
-# Маппинг расширений на язык программирования
 EXTENSION_TO_LANGUAGE = {
     ".py": "python",
     ".pyi": "python",
@@ -71,65 +68,34 @@ EXTENSION_TO_LANGUAGE = {
 
 
 def detect_language(filename: str, model_language: Optional[str] = None) -> str:
-    """
-    Определяет язык для подсветки синтаксиса.
-    
-    Приоритет:
-    1. Язык, указанный моделью (если есть)
-    2. Определение по расширению файла
-    3. 'text' (по умолчанию)
-    
-    Args:
-        filename: Имя файла с расширением
-        model_language: Язык, указанный моделью в маркере
-    Returns:
-        Название языка для подсветки
-    """
-    # 1. Приоритет у модели
     if model_language and model_language.strip():
         return model_language.lower()
 
-    # 2. Определение по расширению
     _, ext = os.path.splitext(filename)
 
     if not ext:
-        # Файлы без расширения (например, Dockerfile)
         return EXTENSION_TO_LANGUAGE.get(filename, "text")
 
     return EXTENSION_TO_LANGUAGE.get(ext.lower(), "text")
 
 
 def parse_ai_response(content: str) -> Tuple[str, List[Dict]]:
-    """
-    Парсит ответ ИИ, извлекая текст, файлы и сниппеты.
-    
-    Аргументы:
-        content: Сырой ответ ИИ с маркерами
-    Возвращает:
-        - text: текст без маркеров
-        - files: список словарей {type, filename, language, content}
-    
-    Типы:
-        - 'file': файл для сохранения (маркер ### FILE:)
-        - 'snippet': пример кода (маркер ### CODE:)
-    """
-    # Паттерн для FILE (с именем файла)
-    file_pattern = r'### FILE: (.*?)\n```(\w*)\n([\s\S]*?)```'
-
-    # Паттерн для CODE (только язык)
-    code_pattern = r'### CODE: (\w*)\n```(\w*)\n([\s\S]*?)```'
-
     files = []
     text = content
 
-    # 1. Парсим файлы (FILE)
+    file_pattern = r'### ?FILE: ?(.*?)\n*```(\w*)\n([\s\S]*?)```'
+    code_pattern = r'### ?CODE: ?(\w*)\n+```(\w*)\n([\s\S]*?)```'
+
     for match in re.finditer(file_pattern, content):
         filename = match.group(1).strip()
         model_language = match.group(2).strip()
         code = match.group(3).strip()
 
-        # Защита от directory traversal
         if ".." in filename or filename.startswith("/"):
+            continue
+
+        if code == "[здесь был код, сгенерированный нейросетью]" or code.startswith("[здесь был код, сгенерированный нейросетью, ID:"):
+            logger.warning(f"Пропущен плейсхолдер в файле {filename}")
             continue
 
         language = detect_language(filename, model_language)
@@ -143,7 +109,6 @@ def parse_ai_response(content: str) -> Tuple[str, List[Dict]]:
 
         text = text.replace(match.group(0), "")
 
-    # 2. Парсим сниппеты (CODE)
     for match in re.finditer(code_pattern, content):
         language = match.group(1).strip() or "text"
         code = match.group(3).strip()
@@ -157,7 +122,31 @@ def parse_ai_response(content: str) -> Tuple[str, List[Dict]]:
 
         text = text.replace(match.group(0), "")
 
-    # Очищаем текст от лишних переносов
+    if not files and '```' in content:
+        logger.warning("Найдены блоки кода без маркеров. Пытаемся извлечь...")
+        code_pattern = r'```(\w*)\n([\s\S]*?)```'
+        code_blocks = re.findall(code_pattern, content)
+        
+        for i, (lang, code) in enumerate(code_blocks):
+            if code.strip().startswith("[здесь был код, сгенерированный нейросетью"):
+                continue
+                
+            ext_map = {"python": "py", "javascript": "js", "bash": "sh", 
+                      "html": "html", "css": "css", "json": "json", "sql": "sql"}
+            ext = ext_map.get(lang, "txt")
+            filename = f"code_{i+1}.{ext}"
+            
+            files.append({
+                "type": "file",
+                "filename": filename,
+                "language": lang or "text",
+                "content": code.strip()
+            })
+            logger.info(f"Извлечён файл из кодового блока: {filename}")
+
     text = re.sub(r'\n{3,}', '\n\n', text).strip()
+
+    if not files:
+        logger.warning("Файлы не найдены в ответе ИИ")
 
     return text, files

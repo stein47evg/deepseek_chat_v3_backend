@@ -32,20 +32,14 @@ class FileService:
     @staticmethod
     def get_by_project(db: Session, project_id: int) -> List[FileVersion]:
         """
-        Получить все текущие версии файлов для проекта.
+        Получить все текущие версии файлов для проекта через JOIN.
         """
-        # Находим чат проекта
-        chat = db.query(Chat).filter(Chat.project_id == project_id).first()
-        if not chat:
-            return []
-
-        # Получаем все текущие версии файлов чата
-        return (
-            db.query(FileVersion)
-            .filter(FileVersion.chat_id == chat.id, FileVersion.is_current == True)
-            .order_by(FileVersion.filename.asc())
-            .all()
-        )
+        return db.query(FileVersion).join(
+            Chat, FileVersion.chat_id == Chat.id
+        ).filter(
+            Chat.project_id == project_id,
+            FileVersion.is_current == True
+        ).order_by(FileVersion.filename.asc()).all()
 
     @staticmethod
     def get_by_id(db: Session, file_id: int) -> FileVersion | None:
@@ -156,15 +150,15 @@ class FileService:
                     detail=f"Неподдерживаемый тип файла: {normalized_path}",
                 )
 
-            # Валидация
-
             # Читаем содержимое
             try:
                 with open(full_path, "r", encoding="utf-8") as f:
                     content_str = f.read()
             except UnicodeDecodeError:
-                status_code = (415,)
-                detail = f"Неподдерживаемый кодировка файла: {normalized_path}"
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"Неподдерживаемый кодировка файла: {normalized_path}",
+                )
 
             # Валидация
             validate_file_size(content_str)
@@ -321,11 +315,10 @@ class FileService:
     def _get_current_manifest(db: Session, chat_id: int) -> dict:
         """Собирает мэнифест текущих файлов чата."""
         manifest = {}
-        current_files = (
-            db.query(FileVersion)
-            .filter(FileVersion.chat_id == chat_id, FileVersion.is_current == True)
-            .all()
-        )
+        current_files = db.query(FileVersion).filter(
+            FileVersion.chat_id == chat_id,
+            FileVersion.is_current == True
+        ).all()
 
         for version in current_files:
             manifest[version.filename] = version.content_hash

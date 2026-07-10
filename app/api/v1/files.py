@@ -23,7 +23,7 @@ def get_files(chat_id: int, db: Session = Depends(get_db)):
     """Получить все файлы чата."""
     return FileService.get_by_chat(db, chat_id)
 
-@router.get("/projects/{project_id}/files", response_model=List[FileVersionResponse])
+@router.get("/projects/{project_id}", response_model=List[FileVersionResponse])
 def get_project_files(
     project_id: int,
     db: Session = Depends(get_db)

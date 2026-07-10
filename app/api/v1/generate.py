@@ -1,7 +1,3 @@
-"""
-Главный эндпоинт для генерации кода.
-"""
-import json
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -20,31 +16,23 @@ async def generate(
     request: GenerateRequest,
     db: Session = Depends(get_db)
 ):
-    """
-    Генерация кода с использованием DeepSeek.
-    
-    Возвращает SSE стрим с событиями:
-    - data: {"content": "текст", "done": false}
-    - data: {"file": {"filename": "...", "content": "..."}}
-    - data: {"done": true, "message_id": 123}
-    """
-    # Проверяем существование чата
     chat = db.query(Chat).filter(Chat.id == chat_id).first()
     if not chat:
         raise HTTPException(status_code=404, detail=f"Чат {chat_id} не найден")
 
-    # Проверяем наличие API ключа
     if not settings.DEEPSEEK_API_KEY:
         raise HTTPException(
             status_code=500,
             detail="DEEPSEEK_API_KEY не настроен"
         )
 
-    # Создаём сервис и запускаем генерацию
-    service = GenerateService(db, chat)
+    service = GenerateService(db, chat_id=chat.id, project_id=chat.project_id)
+
+    max_tokens = getattr(request, 'max_tokens', settings.DEFAULT_MAX_TOKENS)
+    use_stream = getattr(request, 'use_stream', True)
 
     return StreamingResponse(
-        service.generate_stream(request),
+        service.generate_stream(request, max_tokens=max_tokens, use_stream=use_stream),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
