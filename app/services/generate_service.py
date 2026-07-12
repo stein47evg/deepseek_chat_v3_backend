@@ -15,6 +15,7 @@ from app.services.deepseek_client import DeepSeekClient
 from app.services.parser import parse_ai_response
 from app.services.token_counter import count_tokens, calculate_cost
 from app.services.snapshot_service import SnapshotService
+from app.services.generation_manager import generation_manager
 from app.utils.hash_utils import compute_hash
 
 logger = logging.getLogger(__name__)
@@ -34,10 +35,22 @@ class GenerateService:
         max_tokens: int = 8192,
         use_stream: bool = True
     ) -> AsyncGenerator[str, None]:
+        # Основной метод генерации с возвратом SSE стрима
+        task_id = None
+        
         try:
+            # 1. Генерируем task_id
+            current_task = asyncio.current_task()
+            task_id = generation_manager.create_task(self.chat_id, current_task)
+            
+            # Отправляем task_id клиенту
+            yield f"data: {json.dumps({'task_id': task_id, 'status': 'started'})}\n\n"
+            
+            # 2. Формируем контекст
             context = self._build_context(request)
             self._log_request_context(request, context)
 
+            # 3. Сохраняем сообщение пользователя
             user_message = Message(
                 chat_id=self.chat_id,
                 role="user",
@@ -47,6 +60,7 @@ class GenerateService:
             self.db.add(user_message)
             self.db.flush()
 
+            # 4. Отправляем запрос в DeepSeek
             full_response = ""
             input_tokens = context["total_tokens"]
             output_tokens = 0
@@ -55,6 +69,7 @@ class GenerateService:
             BUFFER_SIZE = 50
             chunk_count = 0
 
+            # 5. Стримим ответ
             async for chunk in self.client.generate(
                 messages=context["messages"],
                 model=request.model or "flash",
@@ -62,6 +77,12 @@ class GenerateService:
                 max_tokens=max_tokens,
                 stream=use_stream
             ):
+                # Проверяем, не отменена ли задача
+                if generation_manager.is_cancelled(task_id):
+                    logger.info(f"Генерация {task_id} отменена пользователем")
+                    yield f"data: {json.dumps({'status': 'cancelled', 'done': True})}\n\n"
+                    return
+                
                 if chunk:
                     chunk_count += 1
                     full_response += chunk
@@ -76,6 +97,13 @@ class GenerateService:
             if buffer:
                 yield f"data: {json.dumps({'content': buffer, 'done': False})}\n\n"
             
+            # Проверяем отмену перед сохранением
+            if generation_manager.is_cancelled(task_id):
+                logger.info(f"Генерация {task_id} отменена перед сохранением")
+                yield f"data: {json.dumps({'status': 'cancelled', 'done': True})}\n\n"
+                return
+            
+            # Логируем сырой ответ
             logger.info("=" * 80)
             logger.info("СЫРОЙ ОТВЕТ ОТ НЕЙРОСЕТИ")
             logger.info("=" * 80)
@@ -102,6 +130,13 @@ class GenerateService:
             for f in files:
                 logger.info(f"    - {f.get('type', 'unknown')}: {f.get('filename', 'без имени')} ({len(f.get('content', ''))} символов)")
 
+            # Проверяем отмену перед сохранением в БД
+            if generation_manager.is_cancelled(task_id):
+                logger.info(f"Генерация {task_id} отменена перед сохранением в БД")
+                yield f"data: {json.dumps({'status': 'cancelled', 'done': True})}\n\n"
+                return
+
+            # Создаём сообщение ассистента
             assistant_message = Message(
                 chat_id=self.chat_id,
                 role="assistant",
@@ -117,6 +152,7 @@ class GenerateService:
             message_id = assistant_message.id
             logger.info(f"Сообщение ассистента создано (ID: {message_id})")
 
+            # Сохраняем файлы
             file_ids = []
             for file_data in files:
                 if file_data["type"] == "file":
@@ -138,14 +174,13 @@ class GenerateService:
                         "filename": file_data["filename"],
                         "language": file_data["language"]
                     })
-                    logger.info(f"Файл сохранён в БД: {file_data['filename']} (ID: {file_version.id}, {len(file_data['content'])} символов)")
+                    logger.info(f"Файл сохранён в БД: {file_data['filename']} (ID: {file_version.id})")
 
             content_with_markers = self._build_message_with_markers(text, file_ids)
             assistant_message.content = content_with_markers
             self.db.commit()
-            
-            logger.info(f"Сообщение обновлено с маркерами (ID: {message_id})")
 
+            # Обновляем статистику
             project = self.db.query(Project).filter(Project.id == self.project_id).first()
             if project:
                 project.total_input_tokens = (project.total_input_tokens or 0) + input_tokens
@@ -158,6 +193,7 @@ class GenerateService:
                 chat.total_output_tokens = (chat.total_output_tokens or 0) + output_tokens
                 chat.total_cost = float(chat.total_cost or 0.0) + float(assistant_message.cost or 0.0)
 
+            # Создаём снимок
             manifest = self._get_current_manifest()
             SnapshotService.create(
                 db=self.db,
@@ -170,18 +206,27 @@ class GenerateService:
 
             self.db.commit()
 
+            # Отправляем файлы клиенту
             for file_data in files:
                 if file_data["type"] == "file":
                     yield f"data: {json.dumps({'file': {'filename': file_data['filename'], 'content': file_data['content']}})}\n\n"
 
+            # Финальное событие
             yield f"data: {json.dumps({'done': True, 'message_id': message_id})}\n\n"
             
             logger.info(f"Генерация #{message_id} завершена успешно")
 
+        except asyncio.CancelledError:
+            logger.info(f"Генерация {task_id} отменена")
+            yield f"data: {json.dumps({'status': 'cancelled', 'done': True})}\n\n"
+            raise
         except Exception as e:
             self.db.rollback()
             logger.error(f"Ошибка генерации: {e}", exc_info=True)
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            if task_id:
+                generation_manager.remove_task(task_id)
 
     def _build_message_with_markers(self, text: str, file_ids: List[Dict]) -> str:
         if not file_ids:
