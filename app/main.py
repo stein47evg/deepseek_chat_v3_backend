@@ -1,3 +1,9 @@
+"""
+Точка входа FastAPI приложения.
+Настройка маршрутов, CORS, инициализация БД.
+Перенесён в корень проекта для упрощения запуска.
+"""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,7 +14,6 @@ from app.api.v1 import (
     file_manager,
     files,
     generate,
-    generate_stop,
     messages,
     projects,
     snapshots,
@@ -25,11 +30,17 @@ from app.utils.logging_utils import setup_logging
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Обработчик жизненного цикла приложения."""
+    # Настройка логирования
     setup_logging(settings.LOG_LEVEL)
+    
+    # Запуск: инициализация БД
     init_db()
     yield
+    # Завершение: закрытие соединений
 
 
+# Создание FastAPI приложения
 app = FastAPI(
     title="DeepSeek Chat API",
     description="API для управления проектами, чатами и генерацией кода",
@@ -40,6 +51,7 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+# Настройка CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -48,12 +60,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Подключение роутеров
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(chats.router, prefix="/api/v1")
 app.include_router(messages.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")
 app.include_router(generate.router, prefix="/api/v1")
-app.include_router(generate_stop.router, prefix="/api/v1")
 app.include_router(snapshots.router, prefix="/api/v1")
 app.include_router(sync.router, prefix="/api/v1")
 app.include_router(system_prompts.router, prefix="/api/v1")
@@ -62,17 +74,19 @@ app.include_router(tokens.router, prefix="/api/v1")
 app.include_router(file_manager.router, prefix="/api/v1")
 app.include_router(terminal.router, prefix="/api/v1")
 
-
 @app.get("/")
 async def root():
+    """Корневой эндпоинт для проверки работы."""
     return {"status": "ok", "message": "DeepSeek Chat API работает"}
 
 
 @app.get("/health")
 async def health():
+    """Эндпоинт для проверки здоровья сервиса."""
     return {"status": "healthy"}
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=settings.DEBUG)

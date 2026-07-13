@@ -3,6 +3,8 @@
 """
 
 import os
+from datetime import datetime
+from typing import List, Optional
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -11,9 +13,9 @@ from app.models.chat import Chat
 from app.models.file_version import FileVersion
 from app.models.project import Project
 from app.services.snapshot_service import SnapshotService
+from app.services.file_manager_service import FileManagerService
 from app.utils.file_utils import is_allowed_file, safe_join, validate_file_size
 from app.utils.hash_utils import compute_hash
-from typing import List
 
 
 class FileService:
@@ -310,6 +312,94 @@ class FileService:
         if version:
             db.delete(version)
             db.commit()
+
+    @staticmethod
+    def get_unified_files1(
+        db: Session, 
+        project_id: int, 
+        show_ignored: bool = False
+    ) -> dict:
+        """
+        Получить унифицированную информацию о файлах проекта.
+        Объединяет данные с диска и из базы данных.
+        """
+        # 1. Получаем проект
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail=f"Проект {project_id} не найден")
+
+        if not os.path.exists(project.folder_path):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Папка проекта {project.folder_path} не существует"
+            )
+
+        # 2. Получаем все файлы с диска
+        disk_files = FileManagerService.get_disk_files(db, project, show_ignored)
+
+        # 3. Получаем все текущие файлы из БД (с содержимым)
+        chat = db.query(Chat).filter(Chat.project_id == project_id).first()
+        db_files = {}
+        if chat:
+            versions = db.query(FileVersion).filter(
+                FileVersion.chat_id == chat.id,
+                FileVersion.is_current == True
+            ).all()
+            for v in versions:
+                normalized = v.filename.replace("\\", "/")
+                db_files[normalized] = v
+
+        # 4. Формируем унифицированный ответ
+        unified_files = []
+        in_db_count = 0
+        not_in_db_count = 0
+
+        for disk_file in disk_files:
+            path = disk_file["path"]
+            version = db_files.get(path)
+            
+            is_in_db = version is not None
+            if is_in_db:
+                in_db_count += 1
+            else:
+                not_in_db_count += 1
+
+            modified_iso = None
+            if disk_file.get("modified"):
+                try:
+                    modified_iso = datetime.fromtimestamp(
+                        disk_file["modified"]
+                    ).isoformat()
+                except:
+                    pass
+
+            unified_files.append({
+                "path": path,
+                "name": disk_file["name"],
+                "size": disk_file["size"],
+                "modified": disk_file.get("modified"),
+                "modified_iso": modified_iso,
+                "in_database": is_in_db,
+                "version_id": version.id if version else None,
+                "content": version.content if version else None,
+                "language": version.language if version else None,
+                "file_type": version.file_type if version else None,
+                "is_current": version.is_current if version else False,
+                "applied": version.applied if version else False,
+                "is_allowed": disk_file.get("isAllowed", True),
+                "is_directory": disk_file.get("isDirectory", False)
+            })
+
+        # 5. Возвращаем ответ
+        return {
+            "project_id": project.id,
+            "project_name": project.name,
+            "folder_path": project.folder_path,
+            "files": unified_files,
+            "total": len(unified_files),
+            "in_database_count": in_db_count,
+            "not_in_database_count": not_in_db_count
+        }
 
     @staticmethod
     def _get_current_manifest(db: Session, chat_id: int) -> dict:
