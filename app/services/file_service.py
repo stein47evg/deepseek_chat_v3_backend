@@ -68,14 +68,18 @@ class FileService:
         manifest = {}
 
         for uploaded_file in files:
-            # Валидация
-            if not is_allowed_file(uploaded_file.filename):
+            # Формируем полный путь
+            full_path = safe_join(project.folder_path, uploaded_file.filename)
+            
+            # Проверяем расширение и размер файла
+            if not is_allowed_file(full_path):
                 raise HTTPException(
                     status_code=415,
-                    detail=f"Неподдерживаемый тип файла: {uploaded_file.filename}",
+                    detail=f"Неподдерживаемый тип файла или превышен размер: {uploaded_file.filename}",
                 )
 
             content = await uploaded_file.read()
+            # Дополнительная проверка размера (для безопасности)
             validate_file_size(content)
 
             # Декодируем содержимое
@@ -88,7 +92,6 @@ class FileService:
                 )
 
             # Записываем на диск
-            full_path = safe_join(project.folder_path, uploaded_file.filename)
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content_str)
@@ -149,7 +152,7 @@ class FileService:
             if not is_allowed_file(full_path):
                 raise HTTPException(
                     status_code=415,
-                    detail=f"Неподдерживаемый тип файла: {normalized_path}",
+                    detail=f"Неподдерживаемый тип файла или превышен размер: {normalized_path}",
                 )
 
             # Читаем содержимое
@@ -162,8 +165,8 @@ class FileService:
                     detail=f"Неподдерживаемый кодировка файла: {normalized_path}",
                 )
 
-            # Валидация
-            validate_file_size(content_str)
+            # Валидация размера
+            validate_file_size(content_str.encode("utf-8"))
 
             # Проверяем, есть ли уже такая версия
             existing = (
@@ -314,7 +317,7 @@ class FileService:
             db.commit()
 
     @staticmethod
-    def get_unified_files1(
+    def get_unified_files(
         db: Session, 
         project_id: int, 
         show_ignored: bool = False

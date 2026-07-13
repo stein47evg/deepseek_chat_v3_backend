@@ -1,6 +1,7 @@
 """
 Эндпоинты для управления файлами.
 """
+
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
@@ -10,7 +11,11 @@ from app.core.config import settings
 from app.models.file_version import FileVersion
 from app.models.chat import Chat
 from app.models.project import Project
-from app.schemas.file_version import FileVersionResponse, ApplyRequest, MakeCurrentRequest
+from app.schemas.file_version import (
+    FileVersionResponse,
+    ApplyRequest,
+    MakeCurrentRequest,
+)
 from app.schemas.files import UnifiedFileResponse, UnifiedFilesResponse
 from app.services.file_service import FileService
 from app.services.file_manager_service import FileManagerService
@@ -28,10 +33,7 @@ def get_files(chat_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/projects/{project_id}", response_model=List[FileVersionResponse])
-def get_project_files(
-    project_id: int,
-    db: Session = Depends(get_db)
-):
+def get_project_files(project_id: int, db: Session = Depends(get_db)):
     """
     Получить все текущие версии файлов для проекта.
     """
@@ -40,17 +42,15 @@ def get_project_files(
 
 @router.get("/projects/{project_id}/unified", response_model=UnifiedFilesResponse)
 def get_unified_files(
-    project_id: int,
-    show_ignored: bool = False,
-    db: Session = Depends(get_db)
+    project_id: int, show_ignored: bool = False, db: Session = Depends(get_db)
 ):
     """
     Универсальный эндпоинт для получения всех файлов проекта.
     Объединяет информацию с диска и из базы данных в одном формате.
-    
+
     - show_ignored: показывать игнорируемые файлы (node_modules, .git и т.д.)
     """
-    result = FileService.get_unified_files1(db, project_id, show_ignored)
+    result = FileService.get_unified_files(db, project_id, show_ignored)
     return UnifiedFilesResponse(**result)
 
 
@@ -68,7 +68,7 @@ async def upload_files(
     project_id: int,
     files: Optional[List[UploadFile]] = File(None),
     filenames: Optional[List[str]] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Загрузить или синхронизировать файлы.
@@ -77,7 +77,7 @@ async def upload_files(
     """
     if files and len(files) > 0:
         return await FileService.upload(db, project_id, files)
-    
+
     if filenames and len(filenames) > 0:
         return FileService.sync_by_filename(db, project_id, filenames)
 
