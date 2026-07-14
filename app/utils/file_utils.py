@@ -35,7 +35,14 @@ IGNORED_PATTERNS = [
 
 
 def is_ignored(path: str) -> bool:
-    """Проверяет, нужно ли игнорировать файл/папку."""
+    """
+    Проверяет, нужно ли игнорировать файл/папку.
+
+    Аргументы:
+        path: Путь к файлу или папке
+    Возвращает:
+        True если нужно игнорировать, иначе False
+    """
     name = os.path.basename(path)
     for pattern in IGNORED_PATTERNS:
         if pattern.startswith("*"):
@@ -49,11 +56,20 @@ def is_ignored(path: str) -> bool:
 def scan_directory_for_disk(
     directory: str, show_ignored: bool = False
 ) -> List[Dict[str, Any]]:
-    """Сканирует директорию и возвращает список файлов для файлового менеджера."""
+    """
+    Сканирует директорию и возвращает список файлов для файлового менеджера.
+
+    Аргументы:
+        directory: Путь к директории
+        show_ignored: Показывать игнорируемые файлы
+    Возвращает:
+        Список словарей с информацией о файлах
+    """
     result = []
     directory = os.path.abspath(directory)
 
     for root, dirs, files in os.walk(directory):
+        # Фильтруем игнорируемые папки
         if not show_ignored:
             dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d))]
 
@@ -61,18 +77,21 @@ def scan_directory_for_disk(
             file_path = os.path.join(root, file)
             rel_path = os.path.relpath(file_path, directory)
 
+            # Фильтруем игнорируемые файлы
             if not show_ignored and is_ignored(rel_path):
                 continue
 
             try:
                 stat = os.stat(file_path)
-                result.append({
-                    "path": rel_path.replace("\\", "/"),
-                    "name": file,
-                    "size": stat.st_size,
-                    "modified": stat.st_mtime,
-                    "isDirectory": False,
-                })
+                result.append(
+                    {
+                        "path": rel_path.replace("\\", "/"),
+                        "name": file,
+                        "size": stat.st_size,
+                        "modified": stat.st_mtime,
+                        "isDirectory": False,
+                    }
+                )
             except (OSError, IOError):
                 continue
 
@@ -80,7 +99,17 @@ def scan_directory_for_disk(
 
 
 def safe_join(base_path: str, filename: str) -> str:
-    """Безопасное соединение путей с защитой от directory traversal."""
+    """
+    Безопасное соединение путей с защитой от directory traversal.
+
+    Аргументы:
+        base_path: Абсолютный путь к папке проекта
+        filename: Относительный путь к файлу
+    Возвращает:
+        Полный безопасный путь
+    Исключение:
+        InvalidPathError: При попытке выйти за пределы проекта
+    """
     base_abs = os.path.abspath(base_path)
     full_path = os.path.abspath(os.path.join(base_abs, filename))
 
@@ -90,35 +119,33 @@ def safe_join(base_path: str, filename: str) -> str:
     return full_path
 
 
-def is_allowed_file(file_path: str) -> bool:
+def is_allowed_file(filename: str) -> bool:
     """
-    Проверяет, разрешён ли файл для загрузки.
-    Проверяет расширение и размер файла.
-    
-    Args:
-        file_path: Полный путь к файлу
-    
-    Returns:
-        True если файл разрешён, иначе False
+    Проверяет, разрешён ли тип файла для загрузки.
+
+    Аргументы:
+        filename: Имя файла с расширением
+    Возвращает:
+        True если разрешён, иначе False
     """
-    # Проверяем расширение
-    _, ext = os.path.splitext(file_path)
-    if ext.lower() not in settings.ALLOWED_EXTENSIONS:
-        return False
-    
-    # Проверяем размер
-    try:
-        stat = os.stat(file_path)
-        if stat.st_size > settings.MAX_FILE_SIZE:
-            return False
-    except OSError:
-        return False
-    
-    return True
+    stat = os.stat(filename)
+    is_allowed_size = False
+    if stat.st_size < settings.MAX_FILE_SIZE:
+        is_allowed_size = True
+    _, ext = os.path.splitext(filename)
+    is_allowed_ext = ext in settings.ALLOWED_EXTENSIONS
+    return is_allowed_size and is_allowed_ext
 
 
 def validate_file_size(content: bytes) -> None:
-    """Проверяет размер содержимого на превышение лимита."""
+    """
+    Проверяет размер файла на превышение лимита.
+
+    Аргументы:
+        content: Содержимое файла в байтах
+    Исключение:
+        FileTooLargeError: При превышении лимита
+    """
     if len(content) > settings.MAX_FILE_SIZE:
         raise FileTooLargeError(len(content), settings.MAX_FILE_SIZE)
 
@@ -126,7 +153,15 @@ def validate_file_size(content: bytes) -> None:
 def scan_directory(
     directory: str, ignore_patterns: List[str] = None
 ) -> List[Tuple[str, str]]:
-    """Рекурсивно сканирует директорию и возвращает все текстовые файлы."""
+    """
+    Рекурсивно сканирует директорию и возвращает все текстовые файлы.
+
+    Аргументы:
+        directory: Путь к директории
+        ignore_patterns: Список паттернов для игнорирования
+    Возвращает:
+        Список кортежей (относительный_путь, содержимое)
+    """
     if ignore_patterns is None:
         ignore_patterns = [".git", "node_modules", "__pycache__", ".venv", "venv"]
 
@@ -134,12 +169,14 @@ def scan_directory(
     directory = os.path.abspath(directory)
 
     for root, dirs, files in os.walk(directory):
+        # Игнорируем системные папки
         dirs[:] = [d for d in dirs if d not in ignore_patterns]
 
         for file in files:
             full_path = os.path.join(root, file)
             rel_path = os.path.relpath(full_path, directory)
 
+            # Проверяем расширение
             if not is_allowed_file(full_path):
                 continue
 
@@ -148,6 +185,7 @@ def scan_directory(
                     content = f.read()
                 result.append((rel_path, content))
             except (UnicodeDecodeError, IOError):
+                # Пропускаем бинарные и недоступные файлы
                 continue
 
     return result

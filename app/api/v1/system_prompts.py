@@ -14,13 +14,13 @@ router = APIRouter(prefix="/system-prompts", tags=["system-prompts"])
 
 @router.get("/", response_model=List[PromptResponse])
 def get_prompts(db: Session = Depends(get_db)):
-    """Получить все системные промпты."""
+    """Получить все системные промпты с подсчётом токенов."""
     return PromptService.get_all(db)
 
 
 @router.get("/quick", response_model=List[PromptResponse])
 def get_quick_prompts(db: Session = Depends(get_db)):
-    """Получить промпты для быстрого выбора (is_quick=True)."""
+    """Получить промпты для быстрого выбора с подсчётом токенов."""
     return PromptService.get_quick(db)
 
 

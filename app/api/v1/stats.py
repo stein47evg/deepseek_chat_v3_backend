@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.chat import Chat
 from app.models.project import Project
 from app.models.message import Message
@@ -30,7 +31,7 @@ def get_chat_stats(chat_id: int, db: Session = Depends(get_db)):
         "total_input_tokens": chat.total_input_tokens or 0,
         "total_output_tokens": chat.total_output_tokens or 0,
         "total_tokens": (chat.total_input_tokens or 0) + (chat.total_output_tokens or 0),
-        "total_cost": chat.total_cost or 0.0,
+        "total_cost": chat.total_cost * settings.RUBLE_RATE or 0.0,
         "messages_count": len(messages),
         "files_generated": len([v for v in file_versions if v.file_type == "generated"])
     }
@@ -50,7 +51,7 @@ def get_project_stats(project_id: int, db: Session = Depends(get_db)):
         "total_input_tokens": project.total_input_tokens or 0,
         "total_output_tokens": project.total_output_tokens or 0,
         "total_tokens": (project.total_input_tokens or 0) + (project.total_output_tokens or 0),
-        "total_cost": project.total_cost or 0.0,
+        "total_cost": project.total_cost * settings.RUBLE_RATE or 0.0,
         "chats_count": len(chats),
         "snapshots_count": len(snapshots)
     }

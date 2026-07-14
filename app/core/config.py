@@ -110,5 +110,8 @@ class Settings:
     MAX_CONTEXT_TOKENS: int = 800_000
     HISTORY_LIMIT: int = 10
 
+    # Курс рубля
+    RUBLE_RATE: int = 78
+
 
 settings = Settings()
