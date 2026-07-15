@@ -147,8 +147,8 @@ async def execute_command(request: ExecuteRequest):
             result = await asyncio.to_thread(run_sync)
             
             if sys.platform == "win32":
-                output = result.stdout.decode('cp1251', errors='ignore')
-                error = result.stderr.decode('cp1251', errors='ignore')
+                output = result.stdout.decode('cp866', errors='ignore')
+                error = result.stderr.decode('cp866', errors='ignore')
             else:
                 output = result.stdout.decode('utf-8', errors='ignore')
                 error = result.stderr.decode('utf-8', errors='ignore')

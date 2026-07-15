@@ -25,6 +25,7 @@ class PromptService:
                 "id": p.id,
                 "name": p.name,
                 "content": p.content,
+                "reminder": p.reminder,
                 "is_default": p.is_default,
                 "is_custom": p.is_custom,
                 "is_quick": p.is_quick,
@@ -46,6 +47,7 @@ class PromptService:
                 "id": p.id,
                 "name": p.name,
                 "content": p.content,
+                "reminder": p.reminder,
                 "is_default": p.is_default,
                 "is_custom": p.is_custom,
                 "is_quick": p.is_quick,
@@ -60,6 +62,7 @@ class PromptService:
         prompt = SystemPrompt(
             name=data.name,
             content=data.content,
+            reminder=data.reminder,
             is_default=False,
             is_custom=True,
             is_quick=data.is_quick
@@ -68,11 +71,11 @@ class PromptService:
         db.commit()
         db.refresh(prompt)
         
-        # Возвращаем с подсчётом токенов
         return {
             "id": prompt.id,
             "name": prompt.name,
             "content": prompt.content,
+            "reminder": prompt.reminder,
             "is_default": prompt.is_default,
             "is_custom": prompt.is_custom,
             "is_quick": prompt.is_quick,
@@ -94,6 +97,8 @@ class PromptService:
             prompt.name = data.name
         if data.content is not None:
             prompt.content = data.content
+        if data.reminder is not None:
+            prompt.reminder = data.reminder
         if data.is_quick is not None:
             prompt.is_quick = data.is_quick
 
@@ -104,6 +109,7 @@ class PromptService:
             "id": prompt.id,
             "name": prompt.name,
             "content": prompt.content,
+            "reminder": prompt.reminder,
             "is_default": prompt.is_default,
             "is_custom": prompt.is_custom,
             "is_quick": prompt.is_quick,
@@ -139,6 +145,7 @@ class PromptService:
                 prompt = SystemPrompt(
                     name=prompt_data["name"],
                     content=prompt_data["content"],
+                    reminder=prompt_data.get("reminder"),
                     is_default=prompt_data["is_default"],
                     is_custom=False,
                     is_quick=prompt_data["is_quick"]

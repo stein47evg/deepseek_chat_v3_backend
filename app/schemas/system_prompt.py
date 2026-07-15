@@ -6,12 +6,14 @@ from typing import Optional
 class PromptCreate(BaseModel):
     name: str
     content: str
+    reminder: Optional[str] = None
     is_quick: bool = False
 
 
 class PromptUpdate(BaseModel):
     name: Optional[str] = None
     content: Optional[str] = None
+    reminder: Optional[str] = None
     is_quick: Optional[bool] = None
 
 
@@ -19,6 +21,7 @@ class PromptResponse(BaseModel):
     id: int
     name: str
     content: str
+    reminder: Optional[str] = None
     is_default: bool
     is_custom: bool
     is_quick: bool

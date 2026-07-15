@@ -220,6 +220,7 @@ class GenerateService:
     def _build_context(self, request: GenerateRequest) -> Dict:
         messages = []
 
+        # 1. Системный промпт
         if request.system_prompt_id:
             prompt = self.db.query(SystemPrompt).filter(
                 SystemPrompt.id == request.system_prompt_id
@@ -233,6 +234,7 @@ class GenerateService:
             if default_prompt:
                 messages.append({"role": "system", "content": default_prompt.content})
 
+        # 2. История сообщений
         history = self.db.query(Message).filter(
             Message.chat_id == self.chat_id
         ).order_by(Message.created_at.desc()).limit(settings.HISTORY_LIMIT).all()
@@ -241,6 +243,22 @@ class GenerateService:
             content = self._restore_markers_for_context(msg)
             messages.append({"role": msg.role, "content": content})
 
+        # 3. СПИСОК ВСЕХ ТЕКУЩИХ ФАЙЛОВ ПРОЕКТА
+        current_files = self.db.query(FileVersion).join(
+            Chat, FileVersion.chat_id == Chat.id
+        ).filter(
+            Chat.project_id == self.project_id,
+            FileVersion.is_current == True
+        ).order_by(FileVersion.filename.asc()).all()
+        
+        if current_files:
+            files_list = "Текущие файлы проекта:\n"
+            for f in current_files:
+                files_list += f"  - {f.filename}\n"
+            messages.append({"role": "system", "content": files_list})
+            logger.info(f"Добавлен список файлов проекта: {len(current_files)} файлов")
+
+        # 4. Содержимое выбранных файлов
         files_content = ""
         if request.selected_files:
             for filename in request.selected_files:
@@ -252,11 +270,13 @@ class GenerateService:
                 if version:
                     files_content += f"--- {version.filename} ---\n{version.content}\n\n"
 
+        # 5. Запрос пользователя
         user_prompt = request.query
         if files_content:
-            user_prompt = f"{request.query}\n\nФайлы проекта:\n{files_content}"
+            user_prompt = f"{request.query}\n\nСодержимое выбранных файлов:\n{files_content}"
         messages.append({"role": "user", "content": user_prompt})
 
+        # 6. Подсчёт токенов
         total_tokens = sum(count_tokens(msg["content"]) for msg in messages)
 
         return {"messages": messages, "total_tokens": total_tokens}
@@ -274,8 +294,10 @@ class GenerateService:
 
     def _get_current_manifest(self) -> Dict[str, str]:
         manifest = {}
-        current_files = self.db.query(FileVersion).filter(
-            FileVersion.chat_id == self.chat_id,
+        current_files = self.db.query(FileVersion).join(
+            Chat, FileVersion.chat_id == Chat.id
+        ).filter(
+            Chat.project_id == self.project_id,
             FileVersion.is_current == True
         ).all()
 

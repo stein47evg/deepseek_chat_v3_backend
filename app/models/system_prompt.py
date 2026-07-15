@@ -1,6 +1,3 @@
-"""
-Модель системного промпта.
-"""
 from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Boolean
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -12,6 +9,7 @@ class SystemPrompt(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     content = Column(Text, nullable=False)
+    reminder = Column(Text, nullable=True)  # ✅ Опциональное поле для напоминания
 
     is_default = Column(Boolean, default=False)
     is_custom = Column(Boolean, default=False)
