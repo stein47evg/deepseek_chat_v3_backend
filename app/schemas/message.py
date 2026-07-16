@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.schemas.file_version import FileVersionResponse
 
 
@@ -9,6 +9,9 @@ class MessageResponse(BaseModel):
     chat_id: int
     role: str
     content: str
+    is_complete: bool = True
+    partial_content: Optional[str] = None
+    context_data: Optional[Dict[str, Any]] = None
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
@@ -22,12 +25,12 @@ class MessageResponse(BaseModel):
 
 class ApplyFileResult(BaseModel):
     filename: str
-    status: str  # success | failed
+    status: str
     error: Optional[str] = None
 
 
 class ApplyFilesResponse(BaseModel):
-    status: str  # completed | partial
+    status: str
     message_id: int
     files_applied: int
     files_failed: int

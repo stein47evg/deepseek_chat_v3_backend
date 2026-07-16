@@ -18,6 +18,24 @@ def get_prompts(db: Session = Depends(get_db)):
     return PromptService.get_all(db)
 
 
+@router.get("/strategies", response_model=List[PromptResponse])
+def get_strategy_prompts(db: Session = Depends(get_db)):
+    """Получить системные промпты для стратегий."""
+    return PromptService.get_all_strategies(db)
+
+
+@router.get("/strategy/{strategy}", response_model=PromptResponse)
+def get_prompt_by_strategy(strategy: str, db: Session = Depends(get_db)):
+    """Получить системный промпт по стратегии."""
+    prompt = PromptService.get_by_strategy(db, strategy)
+    if not prompt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Промпт для стратегии {strategy} не найден"
+        )
+    return prompt
+
+
 @router.get("/quick", response_model=List[PromptResponse])
 def get_quick_prompts(db: Session = Depends(get_db)):
     """Получить промпты для быстрого выбора с подсчётом токенов."""

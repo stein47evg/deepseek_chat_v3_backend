@@ -8,6 +8,7 @@ class PromptCreate(BaseModel):
     content: str
     reminder: Optional[str] = None
     is_quick: bool = False
+    strategy: Optional[str] = "flexible"
 
 
 class PromptUpdate(BaseModel):
@@ -15,6 +16,7 @@ class PromptUpdate(BaseModel):
     content: Optional[str] = None
     reminder: Optional[str] = None
     is_quick: Optional[bool] = None
+    strategy: Optional[str] = None
 
 
 class PromptResponse(BaseModel):
@@ -22,6 +24,7 @@ class PromptResponse(BaseModel):
     name: str
     content: str
     reminder: Optional[str] = None
+    strategy: str
     is_default: bool
     is_custom: bool
     is_quick: bool
