@@ -3,13 +3,11 @@
 """
 import os
 import logging
-from typing import List, Dict
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.chat import Chat
 from app.models.file_version import FileVersion
-from app.models.snapshot import Snapshot
 from app.utils.file_utils import scan_directory, safe_join
 from app.utils.hash_utils import compute_hash
 from app.services.snapshot_service import SnapshotService
@@ -39,16 +37,15 @@ class SyncService:
         # Сканируем диск
         files = scan_directory(project.folder_path)
         changes = []
-        manifest = {}
 
         for filename, content in files:
-            manifest[filename] = compute_hash(content)
+            content_hash = compute_hash(content)
 
             # Проверяем, есть ли уже такая версия
             existing = db.query(FileVersion).filter(
                 FileVersion.chat_id == chat.id,
                 FileVersion.filename == filename,
-                FileVersion.content_hash == compute_hash(content)
+                FileVersion.content_hash == content_hash
             ).first()
 
             if existing:
@@ -60,7 +57,7 @@ class SyncService:
                     chat_id=chat.id,
                     filename=filename,
                     content=content,
-                    content_hash=compute_hash(content),
+                    content_hash=content_hash,
                     file_type="synced",
                     is_current=True,
                     applied=True
@@ -68,17 +65,15 @@ class SyncService:
                 db.add(version)
                 changes.append({"filepath": filename, "action": "created"})
 
-        # Создаём снимок
+        # ✅ Создаём снимок текущего состояния (манифест собирается автоматически)
         snapshot = SnapshotService.create(
             db=db,
             project_id=project_id,
             snapshot_type="sync",
             level=2,
             name="Синхронизация",
-            files_manifest=manifest
+            make_current=True
         )
-
-        db.commit()
 
         return {
             "changes": changes,
@@ -108,7 +103,6 @@ class SyncService:
         ).all()
 
         changes = []
-        manifest = {}
 
         for version in current_versions:
             full_path = safe_join(project.folder_path, version.filename)
@@ -136,11 +130,8 @@ class SyncService:
                     db.add(new_version)
                     version.is_current = False
                     changes.append({"filepath": version.filename, "action": "modified"})
-                    manifest[version.filename] = new_hash
-                else:
-                    manifest[version.filename] = version.content_hash
 
-        # Если есть изменения, создаём снимок
+        # ✅ Если есть изменения, создаём снимок текущего состояния
         snapshot_id = None
         if changes:
             snapshot = SnapshotService.create(
@@ -149,11 +140,9 @@ class SyncService:
                 snapshot_type="sync",
                 level=2,
                 name="Тихая синхронизация",
-                files_manifest=manifest
+                make_current=True
             )
             snapshot_id = snapshot.id
-
-        db.commit()
 
         return {
             "changes": changes,

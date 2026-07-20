@@ -14,10 +14,14 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 @router.post("/projects/{project_id}", response_model=SyncResponse)
 def sync_project(project_id: int, db: Session = Depends(get_db)):
     """Явная синхронизация: диск → база."""
-    return SyncService.explicit_sync(db, project_id)
+    result = SyncService.explicit_sync(db, project_id)
+    db.commit()
+    return result
 
 
 @router.post("/projects/{project_id}/quiet", response_model=SyncResponse)
 def quiet_sync(project_id: int, db: Session = Depends(get_db)):
     """Тихая синхронизация: обнаружение изменений и удалений."""
-    return SyncService.quiet_sync(db, project_id)
+    result = SyncService.quiet_sync(db, project_id)
+    db.commit()
+    return result

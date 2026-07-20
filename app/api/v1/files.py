@@ -1,41 +1,49 @@
 """
 Эндпоинты для управления файлами.
 """
-import os
-
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import List, Optional
 from app.core.database import get_db
-from app.core.config import settings
 from app.models.file_version import FileVersion
-from app.models.chat import Chat
-from app.models.project import Project
-from app.schemas.file_version import FileVersionResponse, ApplyRequest, MakeCurrentRequest
+from app.schemas.file_version import FileVersionResponse
 from app.schemas.files import UnifiedFileResponse, UnifiedFilesResponse
 from app.services.file_service import FileService
-from app.services.file_manager_service import FileManagerService
-from app.api.dependencies import get_chat
-from fastapi import UploadFile, File, Form
-from typing import List, Optional
+from app.services.apply_service import ApplyService
+from fastapi import File, Form, UploadFile
 
 router = APIRouter(prefix="/files", tags=["files"])
 
 
-# ======== НОВЫЙ ЭНДПОЙНТ ========
+# ======== ПРИМЕНЕНИЕ ФАЙЛОВ ========
 @router.post("/messages/{message_id}/apply")
 def apply_message_files(message_id: int, db: Session = Depends(get_db)):
     """
     Применить все файлы из сообщения на диск.
-    
-    - Находит все файлы, связанные с сообщением
-    - Записывает их на диск
-    - Делает их текущими версиями
-    - Создаёт снимок состояния
+    Использует единый механизм create_future + restore.
     """
-    return FileService.apply_message_files(db, message_id)
+    result = ApplyService.apply_message_files(db, message_id)
+    db.commit()
+    return result
 
 
-# ======== СУЩЕСТВУЮЩИЕ ЭНДПОЙНТЫ ========
+@router.put("/{file_id}/apply")
+def apply_file(file_id: int, db: Session = Depends(get_db)):
+    """Применить версию файла на диск."""
+    result = ApplyService.apply_file(db, file_id)
+    db.commit()
+    return result
+
+
+@router.post("/{file_id}/make-current")
+def make_current(file_id: int, db: Session = Depends(get_db)):
+    """Сделать версию текущей (выбор индивидуальной версии)."""
+    result = FileService.make_current(db, file_id)
+    db.commit()
+    return result
+
+
+# ======== ЧТЕНИЕ ФАЙЛОВ ========
 @router.get("/chats/{chat_id}", response_model=List[FileVersionResponse])
 def get_files(chat_id: int, db: Session = Depends(get_db)):
     """Получить все файлы чата."""
@@ -47,9 +55,7 @@ def get_project_files(
     project_id: int,
     db: Session = Depends(get_db)
 ):
-    """
-    Получить все текущие версии файлов для проекта.
-    """
+    """Получить все текущие версии файлов для проекта."""
     return FileService.get_by_project(db, project_id)
 
 
@@ -62,8 +68,6 @@ def get_unified_files(
     """
     Универсальный эндпоинт для получения всех файлов проекта.
     Объединяет информацию с диска и из базы данных в одном формате.
-    
-    - show_ignored: показывать игнорируемые файлы (node_modules, .git и т.д.)
     """
     result = FileService.get_unified_files(db, project_id, show_ignored)
     return UnifiedFilesResponse(**result)
@@ -78,40 +82,9 @@ def get_file(file_id: int, db: Session = Depends(get_db)):
     return version
 
 
-@router.post("/projects/{project_id}/upload", response_model=List[FileVersionResponse])
-async def upload_files(
-    project_id: int,
-    files: Optional[List[UploadFile]] = File(None),
-    filenames: Optional[List[str]] = Form(None),
-    db: Session = Depends(get_db)
-):
-    """
-    Загрузить или синхронизировать файлы.
-    - files: файлы с содержимым (из input type="file")
-    - filenames: имена файлов на диске (для синхронизации)
-    """
-    if files and len(files) > 0:
-        return await FileService.upload(db, project_id, files)
-    
-    if filenames and len(filenames) > 0:
-        return FileService.sync_by_filename(db, project_id, filenames)
-
-    raise HTTPException(status_code=400, detail="Не указаны файлы или имена файлов")
-
-
-@router.put("/{file_id}/apply")
-def apply_file(file_id: int, db: Session = Depends(get_db)):
-    """Применить версию файла на диск."""
-    return FileService.apply(db, file_id)
-
-
-@router.post("/{file_id}/make-current")
-def make_current(file_id: int, db: Session = Depends(get_db)):
-    """Сделать версию текущей (выбор индивидуальной версии)."""
-    return FileService.make_current(db, file_id)
-
-
+# ======== УДАЛЕНИЕ ========
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_file(file_id: int, db: Session = Depends(get_db)):
     """Удалить версию файла."""
     FileService.delete(db, file_id)
+    db.commit()

@@ -2,6 +2,7 @@
 Сервис для управления системными промптами.
 """
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 from app.models.system_prompt import SystemPrompt
 from app.schemas.system_prompt import PromptCreate, PromptUpdate
 from app.utils.constants import DEFAULT_PROMPTS
@@ -25,7 +26,6 @@ class PromptService:
                 "id": p.id,
                 "name": p.name,
                 "content": p.content,
-                "reminder": p.reminder,
                 "is_default": p.is_default,
                 "is_custom": p.is_custom,
                 "is_quick": p.is_quick,
@@ -33,6 +33,14 @@ class PromptService:
                 "token_count": count_tokens(p.content)
             })
         return result
+
+    @staticmethod
+    def get_by_id(db: Session, prompt_id: int):
+        """Получить промпт по ID."""
+        prompt = db.query(SystemPrompt).filter(SystemPrompt.id == prompt_id).first()
+        if not prompt:
+            raise HTTPException(status_code=404, detail=f"Промпт {prompt_id} не найден")
+        return prompt
 
     @staticmethod
     def get_quick(db: Session):
@@ -47,7 +55,6 @@ class PromptService:
                 "id": p.id,
                 "name": p.name,
                 "content": p.content,
-                "reminder": p.reminder,
                 "is_default": p.is_default,
                 "is_custom": p.is_custom,
                 "is_quick": p.is_quick,
@@ -62,20 +69,18 @@ class PromptService:
         prompt = SystemPrompt(
             name=data.name,
             content=data.content,
-            reminder=data.reminder,
             is_default=False,
             is_custom=True,
             is_quick=data.is_quick
         )
         db.add(prompt)
-        db.commit()
+        db.flush()
         db.refresh(prompt)
         
         return {
             "id": prompt.id,
             "name": prompt.name,
             "content": prompt.content,
-            "reminder": prompt.reminder,
             "is_default": prompt.is_default,
             "is_custom": prompt.is_custom,
             "is_quick": prompt.is_quick,
@@ -88,28 +93,25 @@ class PromptService:
         """Обновить пользовательский промпт."""
         prompt = db.query(SystemPrompt).filter(SystemPrompt.id == prompt_id).first()
         if not prompt:
-            raise ValueError(f"Промпт {prompt_id} не найден")
+            raise HTTPException(status_code=404, detail=f"Промпт {prompt_id} не найден")
 
         if not prompt.is_custom:
-            raise ValueError("Нельзя редактировать предустановленный промпт")
+            raise HTTPException(status_code=403, detail="Нельзя редактировать предустановленный промпт")
 
         if data.name is not None:
             prompt.name = data.name
         if data.content is not None:
             prompt.content = data.content
-        if data.reminder is not None:
-            prompt.reminder = data.reminder
         if data.is_quick is not None:
             prompt.is_quick = data.is_quick
 
-        db.commit()
+        db.flush()
         db.refresh(prompt)
         
         return {
             "id": prompt.id,
             "name": prompt.name,
             "content": prompt.content,
-            "reminder": prompt.reminder,
             "is_default": prompt.is_default,
             "is_custom": prompt.is_custom,
             "is_quick": prompt.is_quick,
@@ -122,13 +124,12 @@ class PromptService:
         """Удалить пользовательский промпт."""
         prompt = db.query(SystemPrompt).filter(SystemPrompt.id == prompt_id).first()
         if not prompt:
-            return
+            raise HTTPException(status_code=404, detail=f"Промпт {prompt_id} не найден")
 
         if not prompt.is_custom:
-            raise ValueError("Нельзя удалять предустановленный промпт")
+            raise HTTPException(status_code=403, detail="Нельзя удалять предустановленный промпт")
 
         db.delete(prompt)
-        db.commit()
 
     @staticmethod
     def seed_defaults(db: Session):
@@ -145,11 +146,8 @@ class PromptService:
                 prompt = SystemPrompt(
                     name=prompt_data["name"],
                     content=prompt_data["content"],
-                    reminder=prompt_data.get("reminder"),
                     is_default=prompt_data["is_default"],
                     is_custom=False,
                     is_quick=prompt_data["is_quick"]
                 )
                 db.add(prompt)
-
-        db.commit()

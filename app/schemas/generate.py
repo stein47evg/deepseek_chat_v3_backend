@@ -11,6 +11,7 @@ class GenerateRequest(BaseModel):
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 8192
     use_stream: Optional[bool] = True
+    strategy: Optional[str] = None  # full_history, no_history, flexible
 
 
 class GenerateResponse(BaseModel):

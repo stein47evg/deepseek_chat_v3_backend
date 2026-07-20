@@ -5,7 +5,6 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models.snapshot import Snapshot
 from app.schemas.snapshot import SnapshotCreate, SnapshotResponse, RestoreRequest
 from app.services.snapshot_service import SnapshotService
 
@@ -19,20 +18,13 @@ def get_snapshots(
     db: Session = Depends(get_db)
 ):
     """Получить снимки проекта с фильтром по уровню."""
-    if level == "all" or not level:
-        return SnapshotService.get_by_project(db, project_id)
-    else:
-        levels = [int(l) for l in level.split(",")]
-        return SnapshotService.get_by_levels(db, project_id, levels)
+    return SnapshotService.get_by_project(db, project_id) if level == "all" or not level else SnapshotService.get_by_levels(db, project_id, [int(l) for l in level.split(",")])
 
 
 @router.get("/{snapshot_id}", response_model=SnapshotResponse)
 def get_snapshot_by_id(snapshot_id: int, db: Session = Depends(get_db)):
     """Получить снимок по ID."""
-    snapshot = db.query(Snapshot).filter(Snapshot.id == snapshot_id).first()
-    if not snapshot:
-        raise HTTPException(status_code=404, detail=f"Снимок {snapshot_id} не найден")
-    return snapshot
+    return SnapshotService.get_by_id(db, snapshot_id)
 
 
 @router.post("/projects/{project_id}", response_model=SnapshotResponse, status_code=status.HTTP_201_CREATED)
@@ -69,23 +61,16 @@ def rollback_to_previous(
     project_id: int,
     db: Session = Depends(get_db)
 ):
-    """
-    Откатиться к предыдущему снимку (без предупреждений).
-    Удобно для тестирования и разработки.
-    """
+    """Откатиться к предыдущему снимку."""
     return SnapshotService.rollback_to_previous(db, project_id)
 
 
-# ======== НОВЫЙ ЭНДПОЙНТ ========
 @router.post("/projects/{project_id}/forward")
 def forward_to_next(
     project_id: int,
     db: Session = Depends(get_db)
 ):
-    """
-    Перейти к следующему снимку (без предупреждений).
-    Удобно для тестирования и разработки.
-    """
+    """Перейти к следующему снимку."""
     return SnapshotService.forward_to_next(db, project_id)
 
 

@@ -2,6 +2,7 @@
 Сервис для работы с чатами.
 """
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 from app.models.chat import Chat
 from app.schemas.chat import ChatCreate
 
@@ -24,6 +25,25 @@ class ChatService:
             title=data.title or "Новый чат"
         )
         db.add(chat)
+        db.flush()
+        db.refresh(chat)
+        return chat
+
+    @staticmethod
+    def get_by_id(db: Session, chat_id: int):
+        """Получить чат по ID."""
+        chat = db.query(Chat).filter(Chat.id == chat_id).first()
+        if not chat:
+            raise HTTPException(status_code=404, detail=f"Чат {chat_id} не найден")
+        return chat
+
+    @staticmethod
+    def update(db: Session, chat_id: int, title: str):
+        """Обновить название чата."""
+        chat = db.query(Chat).filter(Chat.id == chat_id).first()
+        if not chat:
+            raise HTTPException(status_code=404, detail=f"Чат {chat_id} не найден")
+        chat.title = title
         db.commit()
         db.refresh(chat)
         return chat
@@ -32,6 +52,7 @@ class ChatService:
     def delete(db: Session, chat_id: int):
         """Удалить чат."""
         chat = db.query(Chat).filter(Chat.id == chat_id).first()
-        if chat:
-            db.delete(chat)
-            db.commit()
+        if not chat:
+            raise HTTPException(status_code=404, detail=f"Чат {chat_id} не найден")
+        db.delete(chat)
+        db.commit()

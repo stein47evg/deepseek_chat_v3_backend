@@ -32,7 +32,7 @@ def count_messages_tokens(messages: List[Dict[str, str]]) -> int:
     for msg in messages:
         total += count_tokens(msg.get("content", ""))
         # Добавляем служебные токены для ролей (приблизительно)
-        total += 4  # приблизительная оценка для роли и служебных символов
+        total += 4
     return total
 
 

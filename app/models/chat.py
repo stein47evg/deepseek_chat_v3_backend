@@ -12,6 +12,9 @@ class Chat(Base):
     title = Column(String(255), default="Новый чат")
     created_at = Column(TIMESTAMP, server_default=func.now())
 
+    # ✅ Добавить поле стратегии
+    generation_strategy = Column(String(50), default="flexible")
+
     # Статистика токенов
     total_input_tokens = Column(Integer, default=0)
     total_output_tokens = Column(Integer, default=0)
