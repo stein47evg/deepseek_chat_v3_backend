@@ -64,6 +64,31 @@ def move_to_snapshot(
     return SnapshotService.move_to(db, snapshot_id)
 
 
+@router.post("/projects/{project_id}/rollback")
+def rollback_to_previous(
+    project_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Откатиться к предыдущему снимку (без предупреждений).
+    Удобно для тестирования и разработки.
+    """
+    return SnapshotService.rollback_to_previous(db, project_id)
+
+
+# ======== НОВЫЙ ЭНДПОЙНТ ========
+@router.post("/projects/{project_id}/forward")
+def forward_to_next(
+    project_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Перейти к следующему снимку (без предупреждений).
+    Удобно для тестирования и разработки.
+    """
+    return SnapshotService.forward_to_next(db, project_id)
+
+
 @router.delete("/{snapshot_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_snapshot(
     snapshot_id: int,

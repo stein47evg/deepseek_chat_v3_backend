@@ -32,6 +32,30 @@ class SnapshotService:
         ).first()
 
     @staticmethod
+    def get_previous(db: Session, project_id: int) -> Optional[Snapshot]:
+        """Получить предыдущий снимок (перед текущим)."""
+        current = SnapshotService.get_current(db, project_id)
+        if not current:
+            return None
+        
+        return db.query(Snapshot).filter(
+            Snapshot.project_id == project_id,
+            Snapshot.sequence_number < current.sequence_number
+        ).order_by(Snapshot.sequence_number.desc()).first()
+
+    @staticmethod
+    def get_next(db: Session, project_id: int) -> Optional[Snapshot]:
+        """Получить следующий снимок (после текущего)."""
+        current = SnapshotService.get_current(db, project_id)
+        if not current:
+            return None
+        
+        return db.query(Snapshot).filter(
+            Snapshot.project_id == project_id,
+            Snapshot.sequence_number > current.sequence_number
+        ).order_by(Snapshot.sequence_number.asc()).first()
+
+    @staticmethod
     def create(
         db: Session,
         project_id: int,
@@ -147,6 +171,50 @@ class SnapshotService:
         return SnapshotService.restore(db, snapshot_id, strategy="overwrite")
 
     @staticmethod
+    def rollback_to_previous(db: Session, project_id: int) -> dict:
+        """
+        Откатиться к предыдущему снимку (без предупреждений).
+        Удобно для тестирования и разработки.
+        """
+        current = SnapshotService.get_current(db, project_id)
+        if not current:
+            raise HTTPException(
+                status_code=404,
+                detail="Нет текущего снимка для отката"
+            )
+
+        previous = SnapshotService.get_previous(db, project_id)
+        if not previous:
+            raise HTTPException(
+                status_code=404,
+                detail="Нет предыдущего снимка для отката"
+            )
+
+        return SnapshotService.restore(db, previous.id, strategy="overwrite")
+
+    @staticmethod
+    def forward_to_next(db: Session, project_id: int) -> dict:
+        """
+        Перейти к следующему снимку (без предупреждений).
+        Удобно для тестирования и разработки.
+        """
+        current = SnapshotService.get_current(db, project_id)
+        if not current:
+            raise HTTPException(
+                status_code=404,
+                detail="Нет текущего снимка для перехода"
+            )
+
+        next_snapshot = SnapshotService.get_next(db, project_id)
+        if not next_snapshot:
+            raise HTTPException(
+                status_code=404,
+                detail="Нет следующего снимка для перехода"
+            )
+
+        return SnapshotService.restore(db, next_snapshot.id, strategy="overwrite")
+
+    @staticmethod
     def delete(db: Session, snapshot_id: int):
         snapshot = db.query(Snapshot).filter(Snapshot.id == snapshot_id).first()
         if not snapshot:
@@ -169,14 +237,13 @@ class SnapshotService:
 
     @staticmethod
     def _get_current_manifest(db: Session, project_id: int) -> Dict[str, str]:
-        """Собирает мэнифест текущих файлов проекта через chat_id."""
         chat = db.query(Chat).filter(Chat.project_id == project_id).first()
         if not chat:
             return {}
 
         manifest = {}
         current_files = db.query(FileVersion).filter(
-            FileVersion.chat_id == chat.id,  # ✅ исправлено
+            FileVersion.chat_id == chat.id,
             FileVersion.is_current == True
         ).all()
 
